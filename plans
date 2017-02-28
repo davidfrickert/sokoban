@@ -1,4 +1,4 @@
 
--Crate types (blue, green, red, ...) - struct Crate<T> ...
+-Crate types (blue, green, red, ...)
 -Map generation 
 -Traps (spikes, laser, lava floor)
