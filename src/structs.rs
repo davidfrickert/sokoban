@@ -20,7 +20,7 @@ impl Add for Position {
 
 impl Position {
     pub fn new(x: i32, y: i32) -> Option<Position> {
-        if x > -2 && y > -2 && x < 10 && y < 10 {
+        if x > -2 && y > -2 && x < 50 && y < 50 {
             Some(Position { x: x, y: y })
         } else {
             println!("barraca");
