@@ -5,19 +5,15 @@ extern crate nalgebra as na;
 extern crate sdl2_window;
 
 use std::cell::RefCell;
-use std::sync::Arc;
-use std::sync::RwLock;
-use std::sync::mpsc;
-use std::thread;
+use std::rc::Rc;
 use std::collections::HashMap;
-
 
 use na::core::DMatrix;
 use rand::Rng;
 use opengl_graphics::Texture as Tex;
 use piston_window::{RenderArgs, UpdateArgs, OpenGL, PistonWindow, WindowSettings, Button, Key,
-                    Transformed, image, clear, text, AdvancedWindow, RenderEvent, ReleaseEvent,
-                    PressEvent, UpdateEvent};
+                    Transformed, image, clear, text, AdvancedWindow, RenderEvent, ReleaseEvent, PressEvent,
+                    UpdateEvent};
 use sdl2_window::Sdl2Window;
 use opengl_graphics::GlGraphics;
 use opengl_graphics::glyph_cache::GlyphCache;
@@ -41,12 +37,12 @@ enum Direction {
     Right,
 }
 struct Player {
-    sprite: Option<Arc<RwLock<Tex>>>,
+    sprite: Option<Rc<RefCell<Tex>>>,
     position: Position,
     canMove: bool,
 }
 struct Object {
-    sprite: Option<(String, Arc<RwLock<Tex>>)>,
+    sprite: Option<(String, Rc<RefCell<Tex>>)>,
     obj_type: ObjectType,
     position: Position,
 }
@@ -70,29 +66,27 @@ struct Game {
     size: (u32, u32),
 }
 struct PlayerTextures {
-    player_n: Arc<RwLock<Tex>>,
-    player_s: Arc<RwLock<Tex>>,
-    player_e: Arc<RwLock<Tex>>,
-    player_w: Arc<RwLock<Tex>>,
+    player_n: Rc<RefCell<Tex>>,
+    player_s: Rc<RefCell<Tex>>,
+    player_e: Rc<RefCell<Tex>>,
+    player_w: Rc<RefCell<Tex>>,
 }
 struct GameTextures {
-    wall: Arc<RwLock<Tex>>,
-    floor: Arc<RwLock<Tex>>,
-    _crate: HashMap<String, Arc<RwLock<Tex>>>,
-    b_crate: HashMap<String, Arc<RwLock<Tex>>>,
-    targets: HashMap<String, Arc<RwLock<Tex>>>,
+    wall: Rc<RefCell<Tex>>,
+    floor: Rc<RefCell<Tex>>,
+    _crate: HashMap<String, Rc<RefCell<Tex>>>,
+    b_crate: HashMap<String, Rc<RefCell<Tex>>>,
+    targets: HashMap<String, Rc<RefCell<Tex>>>,
 }
 impl Object {
-    fn new(position: Position,
-           obj_type: ObjectType,
-           sprite: Option<(String, Arc<RwLock<Tex>>)>)
-           -> Object {
+    fn new(position: Position, obj_type: ObjectType, sprite: Option<(String, Rc<RefCell<Tex>>)>) -> Object {
         Object {
             position: position,
             obj_type: obj_type,
             sprite: sprite,
         }
     }
+
 }
 
 impl CollisionMatrix {
@@ -136,10 +130,10 @@ impl Game {
         let mut c_matrix =
             CollisionMatrix { coll: DMatrix::<bool>::from_element(size.0, size.1, false) };
         let player_tex = PlayerTextures {
-            player_n: Arc::new(RwLock::new(Tex::from_path("./assets/player_n.png").unwrap())),
-            player_s: Arc::new(RwLock::new(Tex::from_path("./assets/player_s.png").unwrap())),
-            player_e: Arc::new(RwLock::new(Tex::from_path("./assets/player_e.png").unwrap())),
-            player_w: Arc::new(RwLock::new(Tex::from_path("./assets/player_w.png").unwrap())),
+            player_n: Rc::new(RefCell::new(Tex::from_path("./assets/player_n.png").unwrap())),
+            player_s: Rc::new(RefCell::new(Tex::from_path("./assets/player_s.png").unwrap())),
+            player_e: Rc::new(RefCell::new(Tex::from_path("./assets/player_e.png").unwrap())),
+            player_w: Rc::new(RefCell::new(Tex::from_path("./assets/player_w.png").unwrap())),
         };
 
         let mut crate_tex = Vec::new();
@@ -155,31 +149,26 @@ impl Game {
         let mut t_tex = HashMap::new();
         for tex in crate_tex {
             c_tex.insert(tex.to_owned(),
-                         Arc::new(RwLock::new(Tex::from_path(format!("./assets/crates/{}", tex))
-                                                  .unwrap())));
+                         Rc::new(RefCell::new(Tex::from_path(format!("./assets/crates/{}", tex)).unwrap())));
 
             b_tex.insert(tex.to_owned(),
-                         Arc::new(RwLock::new(Tex::from_path(format!("./assets/blocked/{}",
-                                                                     tex))
-                                                      .unwrap())));
+                         Rc::new(RefCell::new(Tex::from_path(format!("./assets/blocked/{}", tex)).unwrap())));
             t_tex.insert(tex.to_owned(),
-                         Arc::new(RwLock::new(Tex::from_path(format!("./assets/targets/{}",
-                                                                     tex))
-                                                      .unwrap())));
+                         Rc::new(RefCell::new(Tex::from_path(format!("./assets/targets/{}", tex)).unwrap())));
         }
         let obj_tex = GameTextures {
-            wall: Arc::new(RwLock::new(Tex::from_path("./assets/wall.png").unwrap())),
-            floor: Arc::new(RwLock::new(Tex::from_path("./assets/floor.png").unwrap())),
+            wall: Rc::new(RefCell::new(Tex::from_path("./assets/wall.png").unwrap())),
+            floor: Rc::new(RefCell::new(Tex::from_path("./assets/floor.png").unwrap())),
             _crate: c_tex,
             b_crate: b_tex,
             targets: t_tex,
         };
-
+       
         let player_tex = PlayerTextures {
-            player_n: Arc::new(RwLock::new(Tex::from_path("./assets/player_n.png").unwrap())),
-            player_s: Arc::new(RwLock::new(Tex::from_path("./assets/player_s.png").unwrap())),
-            player_e: Arc::new(RwLock::new(Tex::from_path("./assets/player_e.png").unwrap())),
-            player_w: Arc::new(RwLock::new(Tex::from_path("./assets/player_w.png").unwrap())),
+             player_n: Rc::new(RefCell::new(Tex::from_path("./assets/player_n.png").unwrap())),
+             player_s: Rc::new(RefCell::new(Tex::from_path("./assets/player_s.png").unwrap())),
+            player_e: Rc::new(RefCell::new(Tex::from_path("./assets/player_e.png").unwrap())),
+            player_w: Rc::new(RefCell::new(Tex::from_path("./assets/player_w.png").unwrap())),
         };
         let aux_sprite = Some(player_tex.player_n.clone());
         let player = Player {
@@ -194,7 +183,7 @@ impl Game {
             special: Vec::new(),
             player: player,
             obj_tex: Some(obj_tex),
-            player_tex: Some(player_tex),
+            player_tex:Some(player_tex),
             start_t: start,
             score: score,
             targets_left: -1,
@@ -202,48 +191,48 @@ impl Game {
         }
     }
     fn move_player(&mut self, key: Key) {
+            
+            match key {
+                Key::Up => {
+                    let pos = &self.player.position.clone();
+                    self.check(&pos, Direction::Up);
+                    
 
-        match key {
-            Key::Up => {
-                let pos = &self.player.position.clone();
-                self.check(&pos, Direction::Up);
-
-
-                if let Some(ref spr) = self.player_tex {
-                    self.player.sprite = Some(spr.player_n.clone());
+                    if let Some(ref spr) = self.player_tex { 
+                        self.player.sprite = Some(spr.player_n.clone());
+                    }
                 }
-            }
-            Key::Down => {
-                let pos = &self.player.position.clone();
-                self.check(&pos, Direction::Down);
-                if let Some(ref spr) = self.player_tex {
-                    self.player.sprite = Some(spr.player_s.clone());
+                Key::Down => {
+                     let pos = &self.player.position.clone();
+                    self.check(&pos, Direction::Down);
+                     if let Some(ref spr) = self.player_tex {
+                        self.player.sprite = Some(spr.player_s.clone());
+                      }
+
                 }
+                Key::Left => {
+                     let pos = &self.player.position.clone();
+                    self.check(&pos, Direction::Left);
+                   if let Some(ref spr) = self.player_tex {
+                        self.player.sprite = Some(spr.player_w.clone());
+                      }
 
-            }
-            Key::Left => {
-                let pos = &self.player.position.clone();
-                self.check(&pos, Direction::Left);
-                if let Some(ref spr) = self.player_tex {
-                    self.player.sprite = Some(spr.player_w.clone());
+
                 }
+                Key::Right => {
+                      let pos = &self.player.position.clone();
 
+                    self.check(&pos, Direction::Right);
+                    if let Some(ref spr) = self.player_tex {
+                        self.player.sprite = Some(spr.player_e.clone());
+                      }
 
-            }
-            Key::Right => {
-                let pos = &self.player.position.clone();
-
-                self.check(&pos, Direction::Right);
-                if let Some(ref spr) = self.player_tex {
-                    self.player.sprite = Some(spr.player_e.clone());
                 }
-
+                _ => (),
             }
-            _ => (),
-        }
-
+            
     }
-    fn check(&mut self, position: &Position, direction: Direction) {
+    fn check(& mut self, position: &Position, direction: Direction) {
 
         use Direction::*;
 
@@ -278,7 +267,8 @@ impl Game {
                 if ele.1.obj_type == ObjectType::Crate {
                     crate_found = ele.0 as i32;
                     if let Some(ref spr) = ele.1.sprite {
-                        crate_type = spr.0.clone();
+                        crate_type =
+                            spr.0.clone();
                     }
                 }
             }
@@ -297,12 +287,7 @@ impl Game {
                     .enumerate()
                     .find(|x| x.1.position == next);
                 if let Some(ele) = cr {
-                    if ele.1.obj_type == ObjectType::Target &&
-                       ele.1
-                           .sprite
-                           .as_ref()
-                           .unwrap()
-                           .0 == crate_type {
+                    if ele.1.obj_type == ObjectType::Target && ele.1.sprite.as_ref().unwrap().0 == crate_type {
                         target_found = ele.0 as i32;
                     } else {
                         success = false;
@@ -326,12 +311,14 @@ impl Game {
 
                     if let Some(ref spr) = self.obj_tex {
                         crt.sprite = Some((crate_type.clone(),
-
-                                           spr.b_crate
-                                               .get(&crate_type)
-                                               .unwrap()
-                                               .clone()));
-
+                                    
+                                      spr
+                                      .b_crate
+                                      .get(&crate_type)
+                                      .unwrap()
+                                      .clone()
+                                      ));
+                        
                     }
                 }
                 self.score.scored += 1;
@@ -350,38 +337,38 @@ impl Game {
 
     fn render(&mut self, args: &RenderArgs) {
         if let Some(ref mut gl) = self.gl {
-            let iter = self.floor.iter().chain(self.special.iter());
-            let player = &self.player;
-            let mut glyphs = GlyphCache::new("assets/FiraSans-Regular.ttf").unwrap();
-            let time = SystemTime::now().duration_since(self.start_t).unwrap().as_secs();
-            let score;
-            let aux = 100 * self.score.scored - (self.score.moves) - time as i32;
+        let iter = self.floor.iter().chain(self.special.iter());
+        let player = &self.player;
+        let mut glyphs = GlyphCache::new("assets/FiraSans-Regular.ttf").unwrap();
+        let time = SystemTime::now().duration_since(self.start_t).unwrap().as_secs();
+        let score;
+        let aux = 100 * self.score.scored - (self.score.moves) - time as i32;
 
-            if aux < 0 {
-                score = 0;
-            } else {
-                score = aux;
+        if aux < 0 {
+            score = 0;
+        } else {
+            score = aux;
+        }
+        let t = self.targets_left;
+        
+        gl.draw(args.viewport(), |c, g| {
+
+            clear([1.0, 1.0, 1.0, 1.0], g);
+            for img in iter {
+                let pos = &img.position;
+                let transform = c.transform.trans(((pos.get_x() * 64)) as f64,
+                                                  ((pos.get_y() * 64)) as f64);
+                if let Some(ref spr) = img.sprite {
+                    image(&(*spr.1.borrow()), transform, g);
+                }
             }
-            let t = self.targets_left;
-
-            gl.draw(args.viewport(), |c, g| {
-
-                clear([1.0, 1.0, 1.0, 1.0], g);
-                for img in iter {
-                    let pos = &img.position;
-                    let transform = c.transform.trans(((pos.get_x() * 64)) as f64,
-                                                      ((pos.get_y() * 64)) as f64);
-                    if let Some(ref spr) = img.sprite {
-                        image(&(*spr.1.read().unwrap()), transform, g);
-                    }
-                }
-                if let Some(ref spr) = player.sprite {
-                    image(&(*(spr.read().unwrap())),
-                          c.transform.trans((player.position.get_x() * 64) as f64,
-                                            (player.position.get_y() * 64) as f64),
-                          g);
-                }
-                text::Text::new_color([0., 1., 0., 1.], 64)
+            if let Some(ref spr) = player.sprite {
+                image(&(*(spr.borrow())),
+                  c.transform.trans((player.position.get_x() * 64) as f64,
+                                    (player.position.get_y() * 64) as f64),
+                  g);
+            }
+            text::Text::new_color([0., 1., 0., 1.], 64)
                 .draw(&format!("Score: {:?} Time: {:?} T: {}", score, time, t),
                       &mut glyphs,
                       &c.draw_state,
@@ -389,11 +376,11 @@ impl Game {
                       g);
 
 
-            });
+        });
         }
     }
     fn update(&mut self, args: &UpdateArgs) {}
-    fn gen_level(&mut self) {
+    fn gen_level(& mut self) {
         self.special.clear();
         self.floor.clear();
         let mut c_matrix = CollisionMatrix {
@@ -407,29 +394,15 @@ impl Game {
             for j in 0..self.size.1 as i32 {
                 if i == 0 || i == self.size.0 as i32 - 1 || j == 0 || j == self.size.1 as i32 - 1 {
                     if let Some(ref g) = self.gl {
-                        obj = Object::new(Position::new(i, j).unwrap(),
-                                          ObjectType::Blocking,
-                                          Some(("wall".to_string(),
-                                                self.obj_tex
-                                                    .as_ref()
-                                                    .unwrap()
-                                                    .wall
-                                                    .clone())));
+                        obj = Object::new(Position::new(i, j).unwrap(), ObjectType::Blocking, Some(("wall".to_string(), self.obj_tex.as_ref().unwrap().wall.clone())));
                     } else {
                         obj = Object::new(Position::new(i, j).unwrap(), ObjectType::Blocking, None);
                     }
                     self.special.push(obj);
 
                 } else {
-                    if let Some(ref g) = self.gl {
-                        obj = Object::new(Position::new(i, j).unwrap(),
-                                          ObjectType::Passing,
-                                          Some(("floor".to_string(),
-                                                self.obj_tex
-                                                    .as_ref()
-                                                    .unwrap()
-                                                    .floor
-                                                    .clone())));
+                   if let Some(ref g) = self.gl {
+                        obj = Object::new(Position::new(i, j).unwrap(), ObjectType::Passing, Some(("floor".to_string(), self.obj_tex.as_ref().unwrap().floor.clone())));
                     } else {
                         obj = Object::new(Position::new(i, j).unwrap(), ObjectType::Passing, None);
                     }
@@ -497,20 +470,9 @@ impl Game {
                         *crate_n.get_mut(tex).unwrap() += 1;
 
                         if let Some(ref g) = self.gl {
-                            crates.push(Object::new(Position::new(i, j).unwrap(),
-                                                    ObjectType::Crate,
-                                                    Some((tex.to_string(),
-                                                          self.obj_tex
-                                                              .as_ref()
-                                                              .unwrap()
-                                                              ._crate
-                                                              .get(tex)
-                                                              .unwrap()
-                                                              .clone()))));
+                            crates.push(Object::new(Position::new(i, j).unwrap(), ObjectType::Crate, Some((tex.to_string(), self.obj_tex.as_ref().unwrap()._crate.get(tex).unwrap().clone()))));
                         } else {
-                            crates.push(Object::new(Position::new(i, j).unwrap(),
-                                                    ObjectType::Crate,
-                                                    None));
+                            crates.push(Object::new(Position::new(i, j).unwrap(), ObjectType::Crate, None));
                         }
                         c_matrix.coll[(j as usize, i as usize)] = true;
                         if crate_n == crate_numbers {
@@ -564,22 +526,11 @@ impl Game {
                         *_targets.get_mut(tex).unwrap() += 1;
 
 
-
+                        
                         if let Some(ref g) = self.gl {
-                            crates.push(Object::new(Position::new(i, j).unwrap(),
-                                                    ObjectType::Target,
-                                                    Some((tex.to_string(),
-                                                          self.obj_tex
-                                                              .as_ref()
-                                                              .unwrap()
-                                                              .targets
-                                                              .get(tex)
-                                                              .unwrap()
-                                                              .clone()))));
+                            crates.push(Object::new(Position::new(i, j).unwrap(), ObjectType::Target, Some((tex.to_string(), self.obj_tex.as_ref().unwrap().targets.get(tex).unwrap().clone()))));
                         } else {
-                            crates.push(Object::new(Position::new(i, j).unwrap(),
-                                                    ObjectType::Target,
-                                                    None));
+                            crates.push(Object::new(Position::new(i, j).unwrap(), ObjectType::Target, None));
                         }
 
                         targets += 1;
@@ -609,7 +560,7 @@ impl Game {
 }
 
 fn main() {
-    let size = (15, 10);
+    let size = (15, 10); 
     let mut window: PistonWindow<Sdl2Window> = WindowSettings::new("sokoban", (15*64, 10*74))
         .exit_on_esc(true)
         //.opengl(OpenGL::V3_2)
@@ -619,7 +570,7 @@ fn main() {
     window.hide();
     let mut game = Game::new((size.0 as usize, size.1 as usize));
 
-
+   
 
     let bef_gen = SystemTime::now();
     game.gen_level();
@@ -627,50 +578,28 @@ fn main() {
                1_000_000_000.;
     println!("time generating map: {:?}", time);
     window.show();
-    let mut arc_game = Arc::new(RwLock::new(game));
-    let mut game_ = arc_game.clone();
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || loop {
-                      let key = rx.recv().unwrap();
-                      game_.write().unwrap().move_player(key);
-                  });
-    let mut pressed = false;
-    let mut k = piston_window::Key::Unknown;
-    let mut threads = Arc::new(RwLock::new(Vec::new()));
-
+    let mut keye = None;
+    std::thread::spawn(move || {
+        if let Some(key) = keye {
+            game.move_player(key);
+        }
+    });
     while let Some(e) = window.next() {
+        println!("{:?}", e.press_args());
         if let Some(Button::Keyboard(key)) = e.press_args() {
-            k = key;
-            pressed = true;
+            keye = Some(key) ;
+            game.player.canMove = true;
+            //game.move_player(key);
         }
         if let Some(Button::Keyboard(key)) = e.release_args() {
-            pressed = false;
+            game.player.canMove = false;
         }
 
-
-        let thrd = tx.clone();
-        let pr = Arc::new(pressed);
-        let prs = pr.clone();
-        println!("{:?}", prs);
-        let tc = threads.clone();
-        let t = thread::spawn(move || { 
-                             if tc.write().unwrap().len() == 0 {
-                              let c = thread::current();
-
-                                      tc.write().unwrap().push(c);
-
-                                while *prs && tc.write().unwrap().len() == 1 {
-                                    println!("{:?}", prs);
-                                thread::sleep_ms(50);
-                                  thrd.send(k); 
-                                }
-                                tc.write().unwrap().pop();
-                             }});
         if let Some(r) = e.render_args() {
-            arc_game.write().unwrap().render(&r);
+            game.render(&r);
         }
         if let Some(u) = e.update_args() {
-            arc_game.write().unwrap().update(&u);
+            game.update(&u);
         }
     }
     drop(window);
