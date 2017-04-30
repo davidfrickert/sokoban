@@ -629,42 +629,13 @@ fn main() {
     window.show();
     let mut arc_game = Arc::new(RwLock::new(game));
     let mut game_ = arc_game.clone();
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || loop {
-                      let key = rx.recv().unwrap();
-                      game_.write().unwrap().move_player(key);
-                  });
-    let mut pressed = false;
-    let mut k = piston_window::Key::Unknown;
-    let mut threads = Arc::new(RwLock::new(Vec::new()));
 
     while let Some(e) = window.next() {
         if let Some(Button::Keyboard(key)) = e.press_args() {
-            k = key;
-            pressed = true;
-        }
-        if let Some(Button::Keyboard(key)) = e.release_args() {
-            pressed = false;
+            arc_game.write().unwrap().move_player(key);
         }
 
 
-        let thrd = tx.clone();
-        let pr = Arc::new(pressed);
-        let prs = pr.clone();
-        println!("{:?}", prs);
-        let tc = threads.clone();
-        let t = thread::spawn(move || if tc.write().unwrap().len() == 0 {
-                                  let c = thread::current();
-
-                                  tc.write().unwrap().push(c);
-
-                                  while *prs && tc.write().unwrap().len() == 1 {
-                                      println!("{:?}", prs);
-                                      thread::sleep_ms(50);
-                                      thrd.send(k);
-                                  }
-                                  tc.write().unwrap().pop();
-                              });
         if let Some(r) = e.render_args() {
             arc_game.write().unwrap().render(&r);
         }
