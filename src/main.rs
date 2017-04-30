@@ -108,7 +108,6 @@ impl CollisionMatrix {
                 //         self.next(xy, i, j));
             }
         }
-        //std::thread::sleep(std::time::Duration::from_millis(400));
         is_invalid
     }
     pub fn next(&self, ind: (usize, usize), x: i32, y: i32) -> bool {
@@ -202,38 +201,26 @@ impl Game {
         }
     }
     fn move_player(&mut self, key: Key) {
+        let pos = &self.player.position.clone();
+        self.check(&pos, key);
 
         match key {
             Key::Up => {
-                let pos = &self.player.position.clone();
-                self.check(&pos, Direction::Up);
-
-
                 if let Some(ref spr) = self.player_tex {
                     self.player.sprite = Some(spr.player_n.clone());
                 }
             }
             Key::Down => {
-                let pos = &self.player.position.clone();
-                self.check(&pos, Direction::Down);
                 if let Some(ref spr) = self.player_tex {
                     self.player.sprite = Some(spr.player_s.clone());
                 }
-
             }
             Key::Left => {
-                let pos = &self.player.position.clone();
-                self.check(&pos, Direction::Left);
                 if let Some(ref spr) = self.player_tex {
                     self.player.sprite = Some(spr.player_w.clone());
                 }
-
-
             }
             Key::Right => {
-                let pos = &self.player.position.clone();
-
-                self.check(&pos, Direction::Right);
                 if let Some(ref spr) = self.player_tex {
                     self.player.sprite = Some(spr.player_e.clone());
                 }
@@ -243,23 +230,23 @@ impl Game {
         }
 
     }
-    fn check(&mut self, position: &Position, direction: Direction) {
-
-        use Direction::*;
+    fn check(&mut self, position: &Position, key: Key) {
+    
+        use Key::*;
 
         let mut next = (*position).clone();
         let mut crate_found = -1;
         let mut target_found = -1;
         let mut success = true;
-        let dir = |x| {
-            let mut n = x;
-            match direction {
-                Down => n = n + Position::new(0, 1).unwrap(),
-                Up => n = n + Position::new(0, -1).unwrap(),
-                Left => n = n + Position::new(-1, 0).unwrap(),
-                Right => n = n + Position::new(1, 0).unwrap(),
-            }
-            n
+        let dir = |mut pos| {
+            match key {
+                Down => pos = pos + Position::new(0, 1).unwrap(),
+                Up => pos = pos + Position::new(0, -1).unwrap(),
+                Left => pos = pos + Position::new(-1, 0).unwrap(),
+                Right => pos = pos + Position::new(1, 0).unwrap(),
+                _ => ()
+            } 
+            pos
         };
 
         next = dir(next);
@@ -288,7 +275,7 @@ impl Game {
                 self.score.moves += 1;
             } else {
                 success = true;
-                next = dir(next);
+                next = dir(next);  
             }
 
             if crate_found != -1 {
@@ -610,7 +597,7 @@ impl Game {
 
 fn main() {
     let size = (15, 10);
-    let mut window: PistonWindow<Sdl2Window> = WindowSettings::new("sokoban", (15*64, 10*74))
+    let mut window: PistonWindow<Sdl2Window> = WindowSettings::new("sokoban", (15*64, 11*64 - 6))
         .exit_on_esc(true)
         //.opengl(OpenGL::V3_2)
         .resizable(true)
@@ -627,15 +614,12 @@ fn main() {
                1_000_000_000.;
     println!("time generating map: {:?}", time);
     window.show();
-    let mut arc_game = Arc::new(RwLock::new(game));
-    let mut game_ = arc_game.clone();
+    let arc_game = Arc::new(RwLock::new(game));
 
     while let Some(e) = window.next() {
         if let Some(Button::Keyboard(key)) = e.press_args() {
             arc_game.write().unwrap().move_player(key);
         }
-
-
         if let Some(r) = e.render_args() {
             arc_game.write().unwrap().render(&r);
         }
@@ -643,6 +627,5 @@ fn main() {
             arc_game.write().unwrap().update(&u);
         }
     }
-    drop(window);
 
 }
