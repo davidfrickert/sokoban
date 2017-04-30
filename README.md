@@ -6,7 +6,7 @@ Simple sokoban game written in Rust
 
 Requires `git` 
 
-With git:
+Clone repository
 ```
 git clone https://github.com/davidfrickert/sokoban.git
 ```
