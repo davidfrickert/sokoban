@@ -11,7 +11,6 @@ use std::sync::mpsc;
 use std::thread;
 use std::collections::HashMap;
 
-
 use na::core::DMatrix;
 use rand::Rng;
 use opengl_graphics::Texture as Tex;
