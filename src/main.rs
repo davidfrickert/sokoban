@@ -428,7 +428,7 @@ impl Game {
 
 
 
-        let n_crates: usize = rand.gen_range(3, 9);
+        let n_crates: usize = rand.gen_range((3..9));
 
         //vec of crate colors (eg: red, blue, green...)
         let mut elems = Vec::new();
@@ -445,7 +445,7 @@ impl Game {
             for elem in elems.iter() {
                 {
                     let entry = crate_numbers.entry(elem.clone()).or_insert(0);
-                    *entry += rand.gen_range(0, 2);
+                    *entry += rand.gen_range((0..2));
                 }
                 if crate_numbers.values().sum::<usize>() >= n_crates {
                     break 'l;
@@ -459,7 +459,7 @@ impl Game {
         'l: loop {
             'out: for i in 2..self.size.0 as i32 - 2 {
                 'ins: for j in 2..self.size.1 as i32 - 2 {
-                    let r: f32 = rand.gen_range(0., 1.);
+                    let r: f32 = rand.gen_range((0. .. 1.));
                     if r > 0.60 && c_matrix.coll[(j as usize, i as usize)] == false {
 
                         let mut dist = 3 - loop_fails / 30;
@@ -525,7 +525,7 @@ impl Game {
 
             for i in 1..self.size.0 as i32 - 2 {
                 for j in 1..self.size.1 as i32 - 2 {
-                    let r: f32 = rand.gen_range(0., 1.);
+                    let r: f32 = rand.gen_range((0. .. 1.));
                     if r > 0.90 && c_matrix.coll[(j as usize, i as usize)] == false {
 
                         let mut dist = 3 - loop_fails / 30;
