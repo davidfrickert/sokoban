@@ -1,11 +1,10 @@
 use std::ops::Add;
 
-#[derive(Debug,PartialEq,Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Position {
     x: i32,
     y: i32,
 }
-
 
 impl Add for Position {
     type Output = Position;

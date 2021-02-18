@@ -1,28 +1,31 @@
-extern crate piston_window;
-extern crate opengl_graphics;
-extern crate rand;
 extern crate nalgebra as na;
+extern crate opengl_graphics;
+extern crate piston_window;
+extern crate rand;
 extern crate sdl2_window;
 
 use std::cell::RefCell;
+use std::collections::HashMap;
+use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::sync::mpsc;
 use std::thread;
-use std::collections::HashMap;
 
 use na::core::DMatrix;
-use rand::Rng;
-use opengl_graphics::Texture as Tex;
-use piston_window::{RenderArgs, UpdateArgs, OpenGL, PistonWindow, WindowSettings, Button, Key,
-                    Transformed, image, clear, text, AdvancedWindow, RenderEvent, ReleaseEvent,
-                    PressEvent, UpdateEvent};
-use sdl2_window::Sdl2Window;
 use opengl_graphics::GlGraphics;
-use opengl_graphics::glyph_cache::GlyphCache;
+use opengl_graphics::{GlyphCache, Texture as Tex};
+use piston_window::{
+    clear, image, text, AdvancedWindow, Button, Key, OpenGL, PistonWindow, PressEvent,
+    ReleaseEvent, RenderArgs, RenderEvent, TextureSettings, Transformed, UpdateArgs, UpdateEvent,
+    WindowSettings,
+};
+use rand::prelude::IteratorRandom;
+use rand::Rng;
+use sdl2_window::Sdl2Window;
+use std::borrow::Borrow;
+use std::fs;
 use std::time::*;
 use structs::*;
-use std::fs;
 
 pub mod structs;
 #[derive(PartialEq, Copy, Clone, Debug)]
@@ -82,10 +85,11 @@ struct GameTextures {
     targets: HashMap<String, Arc<RwLock<Tex>>>,
 }
 impl Object {
-    fn new(position: Position,
-           obj_type: ObjectType,
-           sprite: Option<(String, Arc<RwLock<Tex>>)>)
-           -> Object {
+    fn new(
+        position: Position,
+        obj_type: ObjectType,
+        sprite: Option<(String, Arc<RwLock<Tex>>)>,
+    ) -> Object {
         Object {
             position: position,
             obj_type: obj_type,
@@ -110,8 +114,11 @@ impl CollisionMatrix {
         is_invalid
     }
     pub fn next(&self, ind: (usize, usize), x: i32, y: i32) -> bool {
-        if ind.0 as i32 + y < 0 || ind.1 as i32 + x < 0 || ind.0 as i32 + y > 9 ||
-           ind.1 as i32 + x > 14 {
+        if ind.0 as i32 + y < 0
+            || ind.1 as i32 + x < 0
+            || ind.0 as i32 + y > 9
+            || ind.1 as i32 + x > 14
+        {
             false
         } else {
             self.coll[((ind.0 as i32 + y) as usize, (ind.1 as i32 + x) as usize)]
@@ -131,53 +138,81 @@ impl Game {
     fn new(size: (usize, usize)) -> Game {
         let score = Score::new();
         let start = SystemTime::now();
-        let mut c_matrix =
-            CollisionMatrix { coll: DMatrix::<bool>::from_element(size.0, size.1, false) };
+        let mut c_matrix = CollisionMatrix {
+            coll: DMatrix::<bool>::from_element(size.0, size.1, false),
+        };
         let player_tex = PlayerTextures {
-            player_n: Arc::new(RwLock::new(Tex::from_path("./assets/player_n.png").unwrap())),
-            player_s: Arc::new(RwLock::new(Tex::from_path("./assets/player_s.png").unwrap())),
-            player_e: Arc::new(RwLock::new(Tex::from_path("./assets/player_e.png").unwrap())),
-            player_w: Arc::new(RwLock::new(Tex::from_path("./assets/player_w.png").unwrap())),
+            player_n: Arc::new(RwLock::new(
+                Tex::from_path("./assets/player_n.png", &TextureSettings::new()).unwrap(),
+            )),
+            player_s: Arc::new(RwLock::new(
+                Tex::from_path("./assets/player_s.png", &TextureSettings::new()).unwrap(),
+            )),
+            player_e: Arc::new(RwLock::new(
+                Tex::from_path("./assets/player_e.png", &TextureSettings::new()).unwrap(),
+            )),
+            player_w: Arc::new(RwLock::new(
+                Tex::from_path("./assets/player_w.png", &TextureSettings::new()).unwrap(),
+            )),
         };
 
         let mut crate_tex = Vec::new();
         for path in fs::read_dir("./assets/crates").unwrap() {
-            crate_tex.push(path.unwrap()
-                               .file_name()
-                               .into_string()
-                               .unwrap());
+            crate_tex.push(path.unwrap().file_name().into_string().unwrap());
         }
 
         let mut c_tex = HashMap::new();
         let mut b_tex = HashMap::new();
         let mut t_tex = HashMap::new();
         for tex in crate_tex {
-            c_tex.insert(tex.to_owned(),
-                         Arc::new(RwLock::new(Tex::from_path(format!("./assets/crates/{}", tex))
-                                                  .unwrap())));
+            c_tex.insert(
+                tex.to_owned(),
+                Arc::new(RwLock::new(
+                    Tex::from_path(format!("./assets/crates/{}", tex), &TextureSettings::new())
+                        .unwrap(),
+                )),
+            );
 
-            b_tex.insert(tex.to_owned(),
-                         Arc::new(RwLock::new(Tex::from_path(format!("./assets/blocked/{}",
-                                                                     tex))
-                                                      .unwrap())));
-            t_tex.insert(tex.to_owned(),
-                         Arc::new(RwLock::new(Tex::from_path(format!("./assets/targets/{}",
-                                                                     tex))
-                                                      .unwrap())));
+            b_tex.insert(
+                tex.to_owned(),
+                Arc::new(RwLock::new(
+                    Tex::from_path(format!("./assets/blocked/{}", tex), &TextureSettings::new())
+                        .unwrap(),
+                )),
+            );
+            t_tex.insert(
+                tex.to_owned(),
+                Arc::new(RwLock::new(
+                    Tex::from_path(format!("./assets/targets/{}", tex), &TextureSettings::new())
+                        .unwrap(),
+                )),
+            );
         }
         let obj_tex = GameTextures {
-            wall: Arc::new(RwLock::new(Tex::from_path("./assets/wall.png").unwrap())),
-            floor: Arc::new(RwLock::new(Tex::from_path("./assets/floor.png").unwrap())),
+            wall: Arc::new(RwLock::new(
+                Tex::from_path("./assets/wall.png", &TextureSettings::new()).unwrap(),
+            )),
+            floor: Arc::new(RwLock::new(
+                Tex::from_path("./assets/floor.png", &TextureSettings::new()).unwrap(),
+            )),
             _crate: c_tex,
             b_crate: b_tex,
             targets: t_tex,
         };
 
         let player_tex = PlayerTextures {
-            player_n: Arc::new(RwLock::new(Tex::from_path("./assets/player_n.png").unwrap())),
-            player_s: Arc::new(RwLock::new(Tex::from_path("./assets/player_s.png").unwrap())),
-            player_e: Arc::new(RwLock::new(Tex::from_path("./assets/player_e.png").unwrap())),
-            player_w: Arc::new(RwLock::new(Tex::from_path("./assets/player_w.png").unwrap())),
+            player_n: Arc::new(RwLock::new(
+                Tex::from_path("./assets/player_n.png", &TextureSettings::new()).unwrap(),
+            )),
+            player_s: Arc::new(RwLock::new(
+                Tex::from_path("./assets/player_s.png", &TextureSettings::new()).unwrap(),
+            )),
+            player_e: Arc::new(RwLock::new(
+                Tex::from_path("./assets/player_e.png", &TextureSettings::new()).unwrap(),
+            )),
+            player_w: Arc::new(RwLock::new(
+                Tex::from_path("./assets/player_w.png", &TextureSettings::new()).unwrap(),
+            )),
         };
         let aux_sprite = Some(player_tex.player_n.clone());
         let player = Player {
@@ -185,7 +220,10 @@ impl Game {
             position: Position::new(1, 3).unwrap(),
             canMove: false,
         };
-        c_matrix.coll[(player.position.get_y() as usize, player.position.get_x() as usize)] = true;
+        c_matrix.coll[(
+            player.position.get_y() as usize,
+            player.position.get_x() as usize,
+        )] = true;
         Game {
             gl: Some(GlGraphics::new(OpenGL::V3_2)),
             floor: Vec::new(),
@@ -223,14 +261,11 @@ impl Game {
                 if let Some(ref spr) = self.player_tex {
                     self.player.sprite = Some(spr.player_e.clone());
                 }
-
             }
             _ => (),
         }
-
     }
     fn check(&mut self, position: &Position, key: Key) {
-    
         use Key::*;
 
         let mut next = (*position).clone();
@@ -243,17 +278,17 @@ impl Game {
                 Up => pos = pos + Position::new(0, -1).unwrap(),
                 Left => pos = pos + Position::new(-1, 0).unwrap(),
                 Right => pos = pos + Position::new(1, 0).unwrap(),
-                _ => ()
-            } 
+                _ => (),
+            }
             pos
         };
 
         next = dir(next);
         let mut crate_type = String::new();
 
-
         {
-            let obj = self.special
+            let obj = self
+                .special
                 .iter()
                 .enumerate()
                 .filter(|x| !(x.1.obj_type == ObjectType::Target))
@@ -274,36 +309,28 @@ impl Game {
                 self.score.moves += 1;
             } else {
                 success = true;
-                next = dir(next);  
+                next = dir(next);
             }
 
             if crate_found != -1 {
-                let cr = self.special
+                let cr = self
+                    .special
                     .iter()
                     .enumerate()
                     .find(|x| x.1.position == next);
                 if let Some(ele) = cr {
-                    if ele.1.obj_type == ObjectType::Target &&
-                       ele.1
-                           .sprite
-                           .as_ref()
-                           .unwrap()
-                           .0 == crate_type {
+                    if ele.1.obj_type == ObjectType::Target
+                        && ele.1.sprite.as_ref().unwrap().0 == crate_type
+                    {
                         target_found = ele.0 as i32;
                     } else {
                         success = false;
                     }
                 }
             }
-
         }
         if success && crate_found != -1 {
-
-
-            self.special
-                .get_mut(crate_found as usize)
-                .unwrap()
-                .position = next;
+            self.special.get_mut(crate_found as usize).unwrap().position = next;
 
             if target_found != -1 {
                 {
@@ -311,13 +338,10 @@ impl Game {
                     crt.obj_type = ObjectType::Blocking;
 
                     if let Some(ref spr) = self.obj_tex {
-                        crt.sprite = Some((crate_type.clone(),
-
-                                           spr.b_crate
-                                               .get(&crate_type)
-                                               .unwrap()
-                                               .clone()));
-
+                        crt.sprite = Some((
+                            crate_type.clone(),
+                            spr.b_crate.get(&crate_type).unwrap().clone(),
+                        ));
                     }
                 }
                 self.score.scored += 1;
@@ -328,18 +352,20 @@ impl Game {
                     self.gen_level();
                 }
             }
-
         }
-
-
     }
 
     fn render(&mut self, args: &RenderArgs) {
         if let Some(ref mut gl) = self.gl {
             let iter = self.floor.iter().chain(self.special.iter());
             let player = &self.player;
-            let mut glyphs = GlyphCache::new("assets/FiraSans-Regular.ttf").unwrap();
-            let time = SystemTime::now().duration_since(self.start_t).unwrap().as_secs();
+
+            let mut glyphs: GlyphCache =
+                GlyphCache::new("assets/FiraSans-Regular.ttf", (), TextureSettings::new()).unwrap();
+            let time = SystemTime::now()
+                .duration_since(self.start_t)
+                .unwrap()
+                .as_secs();
             let score;
             let aux = 100 * self.score.scored - (self.score.moves) - time as i32;
 
@@ -351,30 +377,33 @@ impl Game {
             let t = self.targets_left;
 
             gl.draw(args.viewport(), |c, g| {
-
                 clear([1.0, 1.0, 1.0, 1.0], g);
                 for img in iter {
                     let pos = &img.position;
-                    let transform = c.transform.trans(((pos.get_x() * 64)) as f64,
-                                                      ((pos.get_y() * 64)) as f64);
+                    let transform = c
+                        .transform
+                        .trans((pos.get_x() * 64) as f64, (pos.get_y() * 64) as f64);
                     if let Some(ref spr) = img.sprite {
                         image(&(*spr.1.read().unwrap()), transform, g);
                     }
                 }
                 if let Some(ref spr) = player.sprite {
-                    image(&(*(spr.read().unwrap())),
-                          c.transform.trans((player.position.get_x() * 64) as f64,
-                                            (player.position.get_y() * 64) as f64),
-                          g);
+                    image(
+                        &(*(spr.read().unwrap())),
+                        c.transform.trans(
+                            (player.position.get_x() * 64) as f64,
+                            (player.position.get_y() * 64) as f64,
+                        ),
+                        g,
+                    );
                 }
-                text::Text::new_color([0., 1., 0., 1.], 64)
-                .draw(&format!("Score: {:?} Time: {:?} T: {}", score, time, t),
-                      &mut glyphs,
-                      &c.draw_state,
-                      c.transform.trans(0., 64. * 11. - 11.),
-                      g);
-
-
+                text::Text::new_color([0., 1., 0., 1.], 64).draw(
+                    &format!("Score: {:?} Time: {:?} T: {}", score, time, t),
+                    &mut glyphs,
+                    &c.draw_state,
+                    c.transform.trans(0., 64. * 11. - 11.),
+                    g,
+                );
             });
         }
     }
@@ -393,29 +422,28 @@ impl Game {
             for j in 0..self.size.1 as i32 {
                 if i == 0 || i == self.size.0 as i32 - 1 || j == 0 || j == self.size.1 as i32 - 1 {
                     if let Some(ref g) = self.gl {
-                        obj = Object::new(Position::new(i, j).unwrap(),
-                                          ObjectType::Blocking,
-                                          Some(("wall".to_string(),
-                                                self.obj_tex
-                                                    .as_ref()
-                                                    .unwrap()
-                                                    .wall
-                                                    .clone())));
+                        obj = Object::new(
+                            Position::new(i, j).unwrap(),
+                            ObjectType::Blocking,
+                            Some((
+                                "wall".to_string(),
+                                self.obj_tex.as_ref().unwrap().wall.clone(),
+                            )),
+                        );
                     } else {
                         obj = Object::new(Position::new(i, j).unwrap(), ObjectType::Blocking, None);
                     }
                     self.special.push(obj);
-
                 } else {
                     if let Some(ref g) = self.gl {
-                        obj = Object::new(Position::new(i, j).unwrap(),
-                                          ObjectType::Passing,
-                                          Some(("floor".to_string(),
-                                                self.obj_tex
-                                                    .as_ref()
-                                                    .unwrap()
-                                                    .floor
-                                                    .clone())));
+                        obj = Object::new(
+                            Position::new(i, j).unwrap(),
+                            ObjectType::Passing,
+                            Some((
+                                "floor".to_string(),
+                                self.obj_tex.as_ref().unwrap().floor.clone(),
+                            )),
+                        );
                     } else {
                         obj = Object::new(Position::new(i, j).unwrap(), ObjectType::Passing, None);
                     }
@@ -424,9 +452,6 @@ impl Game {
                 }
             }
         }
-
-
-
 
         let n_crates: usize = rand.gen_range((3..9));
 
@@ -459,9 +484,8 @@ impl Game {
         'l: loop {
             'out: for i in 2..self.size.0 as i32 - 2 {
                 'ins: for j in 2..self.size.1 as i32 - 2 {
-                    let r: f32 = rand.gen_range((0. .. 1.));
+                    let r: f32 = rand.gen_range((0. ..1.));
                     if r > 0.60 && c_matrix.coll[(j as usize, i as usize)] == false {
-
                         let mut dist = 3 - loop_fails / 30;
                         if dist < 0 {
                             dist = 0;
@@ -473,7 +497,7 @@ impl Game {
                             continue;
                         }
                         loop_fails = 0;
-                        let tex = *rand.choose(&crate_numbers.keys().collect::<Vec<_>>()).unwrap();
+                        let tex = crate_numbers.keys().choose(&mut rand).unwrap();
 
                         crate_n.entry(tex.to_owned()).or_insert(0);
 
@@ -483,51 +507,51 @@ impl Game {
                         *crate_n.get_mut(tex).unwrap() += 1;
 
                         if let Some(ref g) = self.gl {
-                            crates.push(Object::new(Position::new(i, j).unwrap(),
-                                                    ObjectType::Crate,
-                                                    Some((tex.to_string(),
-                                                          self.obj_tex
-                                                              .as_ref()
-                                                              .unwrap()
-                                                              ._crate
-                                                              .get(tex)
-                                                              .unwrap()
-                                                              .clone()))));
+                            crates.push(Object::new(
+                                Position::new(i, j).unwrap(),
+                                ObjectType::Crate,
+                                Some((
+                                    tex.to_string(),
+                                    self.obj_tex
+                                        .as_ref()
+                                        .unwrap()
+                                        ._crate
+                                        .get(tex)
+                                        .unwrap()
+                                        .clone(),
+                                )),
+                            ));
                         } else {
-                            crates.push(Object::new(Position::new(i, j).unwrap(),
-                                                    ObjectType::Crate,
-                                                    None));
+                            crates.push(Object::new(
+                                Position::new(i, j).unwrap(),
+                                ObjectType::Crate,
+                                None,
+                            ));
                         }
                         c_matrix.coll[(j as usize, i as usize)] = true;
                         if crate_n == crate_numbers {
                             break 'l;
                         }
 
-
-
                         if rand.gen() {
                             continue 'out;
                         } else {
                             continue 'ins;
                         }
-
                     }
                 }
             }
         }
-
 
         let mut _targets = HashMap::new();
         let mut targets = 0;
         let crates_ = crates.len();
         let mut target = Vec::with_capacity(crates_);
         'l: loop {
-
             for i in 1..self.size.0 as i32 - 2 {
                 for j in 1..self.size.1 as i32 - 2 {
-                    let r: f32 = rand.gen_range((0. .. 1.));
+                    let r: f32 = rand.gen_range((0. ..1.));
                     if r > 0.90 && c_matrix.coll[(j as usize, i as usize)] == false {
-
                         let mut dist = 3 - loop_fails / 30;
                         if dist < 0 {
                             dist = 0;
@@ -539,33 +563,36 @@ impl Game {
                         }
 
                         loop_fails = 0;
-                        let tex = *rand.choose(&crate_numbers.keys().collect::<Vec<_>>()).unwrap();
+                        let tex = crate_numbers.keys().choose(&mut rand).unwrap();
 
                         _targets.entry(tex.to_owned()).or_insert(0);
                         if _targets[tex] == crate_numbers[tex] {
                             continue;
                         }
 
-
                         *_targets.get_mut(tex).unwrap() += 1;
 
-
-
                         if let Some(ref g) = self.gl {
-                            crates.push(Object::new(Position::new(i, j).unwrap(),
-                                                    ObjectType::Target,
-                                                    Some((tex.to_string(),
-                                                          self.obj_tex
-                                                              .as_ref()
-                                                              .unwrap()
-                                                              .targets
-                                                              .get(tex)
-                                                              .unwrap()
-                                                              .clone()))));
+                            crates.push(Object::new(
+                                Position::new(i, j).unwrap(),
+                                ObjectType::Target,
+                                Some((
+                                    tex.to_string(),
+                                    self.obj_tex
+                                        .as_ref()
+                                        .unwrap()
+                                        .targets
+                                        .get(tex)
+                                        .unwrap()
+                                        .clone(),
+                                )),
+                            ));
                         } else {
-                            crates.push(Object::new(Position::new(i, j).unwrap(),
-                                                    ObjectType::Target,
-                                                    None));
+                            crates.push(Object::new(
+                                Position::new(i, j).unwrap(),
+                                ObjectType::Target,
+                                None,
+                            ));
                         }
 
                         targets += 1;
@@ -577,9 +604,10 @@ impl Game {
                 }
             }
         }
-        println!("final result: crates: {:?}\n targets: {:?}\n",
-                 crate_n,
-                 _targets);
+        println!(
+            "final result: crates: {:?}\n targets: {:?}\n",
+            crate_n, _targets
+        );
         target.append(&mut crates);
         self.special.append(&mut target);
         self.targets_left = targets as i32;
@@ -590,27 +618,28 @@ impl Game {
             }
             println!("\n");
         }
-
     }
 }
 
 fn main() {
     let size = (15, 10);
-    let mut window: PistonWindow<Sdl2Window> = WindowSettings::new("sokoban", (15*64, 11*64 - 6))
-        .exit_on_esc(true)
-        //.opengl(OpenGL::V3_2)
-        .resizable(true)
-        .build()
-        .unwrap();
+    let mut window: PistonWindow<Sdl2Window> =
+        WindowSettings::new("sokoban", (15 * 64, 11 * 64 - 6))
+            .exit_on_esc(true)
+            //.opengl(OpenGL::V3_2)
+            .resizable(true)
+            .build()
+            .unwrap();
     window.hide();
     let mut game = Game::new((size.0 as usize, size.1 as usize));
 
-
-
     let bef_gen = SystemTime::now();
     game.gen_level();
-    let time = SystemTime::now().duration_since(bef_gen).unwrap().subsec_nanos() as f64 /
-               1_000_000_000.;
+    let time = SystemTime::now()
+        .duration_since(bef_gen)
+        .unwrap()
+        .subsec_nanos() as f64
+        / 1_000_000_000.;
     println!("time generating map: {:?}", time);
     window.show();
     let arc_game = Arc::new(RwLock::new(game));
@@ -620,11 +649,11 @@ fn main() {
             arc_game.write().unwrap().move_player(key);
         }
         if let Some(r) = e.render_args() {
+            let factory = window.factory.clone();
             arc_game.write().unwrap().render(&r);
         }
         if let Some(u) = e.update_args() {
             arc_game.write().unwrap().update(&u);
         }
     }
-
 }
