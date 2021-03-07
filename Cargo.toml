@@ -7,7 +7,7 @@ authors = ["david <davidjf68@gmail.com>"]
 piston_window = "0.117.0"
 piston2d-opengl_graphics = "0.77.0"
 rand = "0.8.3"
-nalgebra = "0.25.2"
+nalgebra = "0.25.3"
 [dependencies.pistoncore-glfw_window]
 git = "https://github.com/PistonDevelopers/glfw_window"
 [dependencies.pistoncore-sdl2_window]
